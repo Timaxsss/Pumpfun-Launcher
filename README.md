@@ -1,6 +1,6 @@
 # Pump Fun Token Creator
 
-A decentralized Python script to create tokens on the Solana blockchain using the Pump Fun protocol's IDL (Interface Description Language) and smart contract.
+A Python script that enables direct token creation on Solana through the terminal, bypassing the potentially slow Pump Fun web interface. It uses the Pump Fun protocol's IDL (Interface Description Language) and smart contract.
 
 ## What is Pump Fun?
 
