@@ -34,8 +34,8 @@ Pump Fun is a fully decentralized protocol on Solana that enables the creation o
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/Timaxsss/launch-pumpfun.git
-cd launch-pumpfun
+git clone https://github.com/Timaxsss/Pumpfun-Launcher.git
+cd Pumpfun-Launcher
 ```
 
 2. Install required dependencies:
