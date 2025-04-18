@@ -64,4 +64,8 @@ The launcher works by:
 
 ## License
 
+<<<<<<< HEAD
 MIT License - See LICENSE file for details 
+=======
+This project is licensed under the MIT License - see the LICENSE file for details. 
+>>>>>>> c3400c02b32fd8ccb4376f4414ce488212202ab6
