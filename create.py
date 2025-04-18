@@ -13,6 +13,10 @@ import base64
 from PIL import Image
 import io
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Default configuration
 MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com"
@@ -24,15 +28,26 @@ MPL_TOKEN_METADATA = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt51
 RENT_SYSVAR = Pubkey.from_string("SysvarRent111111111111111111111111111111111")
 EVENT_AUTHORITY = Pubkey.from_string("Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1")
 
-# Replace with your own API keys
-PINATA_API_KEY = "YOUR_PINATA_API_KEY"
-PINATA_SECRET_KEY = "YOUR_PINATA_SECRET_KEY"
+# Get API keys from environment variables
+PINATA_API_KEY = os.getenv("PINATA_API_KEY")
+PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
 
-# Replace with your private key
-PRIVATE_KEY = "YOUR_PRIVATE_KEY"  # base58 format
+# Remplacez ceci par votre clé privée réelle
+PRIVATE_KEY = "VOTRE_CLE_PRIVEE_ICI"  # Format base58
 
 class PumpTokenCreator:
+    """
+    A class to handle the creation of Pump tokens on the Solana blockchain.
+    This class manages token creation, metadata handling, and IPFS uploads.
+    """
     def __init__(self, private_key=None, rpc_url=None):
+        """
+        Initialize the PumpTokenCreator with optional private key and RPC URL.
+        
+        Args:
+            private_key (str, optional): Base58 encoded private key
+            rpc_url (str, optional): Custom RPC URL for Solana connection
+        """
         self.rpc_url = rpc_url or MAINNET_RPC_URL
         self.client = Client(self.rpc_url)
         
@@ -49,11 +64,29 @@ class PumpTokenCreator:
     
     @staticmethod
     def find_pda(seeds, program_id):
-        """Find a PDA (Program Derived Address) based on seeds"""
+        """
+        Find a Program Derived Address (PDA) based on provided seeds.
+        
+        Args:
+            seeds (list): List of seed values
+            program_id (Pubkey): Program ID to derive the address from
+            
+        Returns:
+            tuple: (PDA address, bump seed)
+        """
         seeds_bytes = [s if isinstance(s, bytes) else bytes(s) for s in seeds]
         return Pubkey.find_program_address(seeds_bytes, program_id)
     
     def get_mint_pda(self, mint_keypair):
+        """
+        Get all necessary PDAs for token minting.
+        
+        Args:
+            mint_keypair (Keypair): The mint keypair
+            
+        Returns:
+            dict: Dictionary containing all necessary PDA addresses
+        """
         global_seed = b"global"
         global_key, _ = self.find_pda([global_seed], PUMP_PROGRAM_ID)
         
@@ -84,8 +117,16 @@ class PumpTokenCreator:
         }
     
     def get_associated_token_address(self, owner, mint):
-        """Calculate associated token address"""
-        # Simplified implementation based on Solana logic
+        """
+        Calculate the associated token account address.
+        
+        Args:
+            owner (Pubkey): Owner's public key
+            mint (Pubkey): Token mint address
+            
+        Returns:
+            Pubkey: Associated token account address
+        """
         seeds = [
             bytes(owner),
             bytes(TOKEN_PROGRAM),
@@ -93,7 +134,54 @@ class PumpTokenCreator:
         ]
         return self.find_pda(seeds, ASSOCIATED_TOKEN_PROGRAM)[0]
     
-    def create_token(self, name, symbol, uri, creator=None):
+    def get_fee_recipient(self):
+        """
+        Retrieve the fee recipient address from the global state.
+        
+        Returns:
+            Pubkey: Fee recipient address or None if not found
+        """
+        try:
+            global_seed = b"global"
+            global_key, _ = self.find_pda([global_seed], PUMP_PROGRAM_ID)
+            
+            # RPC call to get account data
+            response = self.client.get_account_info(global_key)
+            if response.value is None:
+                print("Unable to retrieve global state.")
+                return None
+            
+            # Account data starts with an 8-byte discriminator, followed by the structure
+            # Global structure: initialized (bool), authority (pubkey), feeRecipient (pubkey), ...
+            # bool = 1 byte, pubkey = 32 bytes
+            # feeRecipient starts at offset 8 (discriminator) + 1 (initialized) + 32 (authority) = 41
+            account_data = response.value.data
+            if len(account_data) < 73:  # 8 + 1 + 32 + 32
+                print("Invalid global account data.")
+                return None
+            
+            # Extract fee recipient address
+            fee_recipient_bytes = account_data[41:73]
+            fee_recipient = Pubkey(fee_recipient_bytes)
+            return fee_recipient
+        except Exception as e:
+            print(f"Error retrieving fee recipient: {str(e)}")
+            return None
+    
+    def create_token_with_buy(self, name, symbol, uri, dev_buy_amount, creator=None):
+        """
+        Create a new token and optionally perform an initial buy.
+        
+        Args:
+            name (str): Token name
+            symbol (str): Token symbol
+            uri (str): Metadata URI
+            dev_buy_amount (float): Amount of SOL to spend on initial buy
+            creator (Pubkey, optional): Creator's public key
+            
+        Returns:
+            tuple: (mint address, transaction signature)
+        """
         max_retries = 3
         retry_count = 0
         
@@ -105,11 +193,11 @@ class PumpTokenCreator:
                 else:
                     creator = Pubkey.from_string(creator)
                     
-                # Create a keypair for the mint
+                # Create mint keypair
                 mint_keypair = Keypair()
                 print(f"New mint address created: {mint_keypair.pubkey()}")
                 
-                # Get required PDAs
+                # Get necessary PDAs
                 pdas = self.get_mint_pda(mint_keypair)
                 
                 # Find associated token account for bonding curve
@@ -118,18 +206,26 @@ class PumpTokenCreator:
                     mint_keypair.pubkey()
                 )
                 
-                # Build creation instruction
-                # discriminator for "create" [24, 30, 200, 40, 5, 28, 7, 119]
-                create_ix_data = bytes([24, 30, 200, 40, 5, 28, 7, 119])
+                # Find associated token account for user
+                associated_user = self.get_associated_token_address(
+                    self.public_key,
+                    mint_keypair.pubkey()
+                )
                 
-                # Add arguments according to IDL structure
+                # Get fee recipient
+                fee_recipient = self.get_fee_recipient()
+                if not fee_recipient:
+                    fee_recipient = EVENT_AUTHORITY
+                    print(f"Using event authority as fee recipient: {fee_recipient}")
+                else:
+                    print(f"Fee recipient retrieved: {fee_recipient}")
+                
+                # Construct creation instruction
+                create_ix_data = bytes([24, 30, 200, 40, 5, 28, 7, 119])
                 name_bytes = name.encode('utf-8')
                 symbol_bytes = symbol.encode('utf-8')
                 uri_bytes = uri.encode('utf-8')
                 
-                # Format arguments for create instruction
-                # Length then data for each string, then creator public key
-                # Note: Follow exact structure defined in IDL
                 create_ix_data += len(name_bytes).to_bytes(4, byteorder='little')
                 create_ix_data += name_bytes
                 create_ix_data += len(symbol_bytes).to_bytes(4, byteorder='little')
@@ -138,7 +234,6 @@ class PumpTokenCreator:
                 create_ix_data += uri_bytes
                 create_ix_data += bytes(creator)
                 
-                # Create AccountMeta for instruction
                 create_accounts = [
                     AccountMeta(pubkey=mint_keypair.pubkey(), is_signer=True, is_writable=True),
                     AccountMeta(pubkey=pdas["mint_authority"], is_signer=False, is_writable=False),
@@ -156,34 +251,85 @@ class PumpTokenCreator:
                     AccountMeta(pubkey=PUMP_PROGRAM_ID, is_signer=False, is_writable=False),
                 ]
                 
-                # Create instruction
                 create_ix = Instruction(
                     program_id=PUMP_PROGRAM_ID,
                     accounts=create_accounts,
                     data=create_ix_data
                 )
                 
-                # Get new blockhash just before sending transaction
+                # List of instructions
+                instructions = [create_ix]
+                
+                if dev_buy_amount > 0:
+                    # Add instruction to create user ATA
+                    ata_ix_data = bytes([])  # No data needed for create_associated_token_account
+                    ata_accounts = [
+                        AccountMeta(pubkey=self.public_key, is_signer=True, is_writable=True),  # Payer
+                        AccountMeta(pubkey=associated_user, is_signer=False, is_writable=True),  # ATA
+                        AccountMeta(pubkey=self.public_key, is_signer=False, is_writable=False),  # Owner
+                        AccountMeta(pubkey=mint_keypair.pubkey(), is_signer=False, is_writable=False),  # Mint
+                        AccountMeta(pubkey=SYSTEM_PROGRAM, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=TOKEN_PROGRAM, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=RENT_SYSVAR, is_signer=False, is_writable=False),
+                    ]
+                    
+                    ata_ix = Instruction(
+                        program_id=ASSOCIATED_TOKEN_PROGRAM,
+                        accounts=ata_accounts,
+                        data=ata_ix_data
+                    )
+                    
+                    instructions.append(ata_ix)
+                    
+                    # Construct buy instruction
+                    buy_ix_data = bytes([102, 6, 61, 18, 1, 218, 235, 234])
+                    buy_amount = 1_000_000  # Adjust for 1 token with 6 decimals (e.g.)
+                    max_sol_cost = int(dev_buy_amount * 1_000_000_000)  # Conversion to lamports
+                    
+                    buy_ix_data += buy_amount.to_bytes(8, byteorder='little')
+                    buy_ix_data += max_sol_cost.to_bytes(8, byteorder='little')
+                    
+                    buy_accounts = [
+                        AccountMeta(pubkey=pdas["global"], is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=fee_recipient, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=mint_keypair.pubkey(), is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=pdas["bonding_curve"], is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=associated_bonding_curve, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=associated_user, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=self.public_key, is_signer=True, is_writable=True),
+                        AccountMeta(pubkey=SYSTEM_PROGRAM, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=TOKEN_PROGRAM, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=RENT_SYSVAR, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=EVENT_AUTHORITY, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=PUMP_PROGRAM_ID, is_signer=False, is_writable=False),
+                    ]
+                    
+                    buy_ix = Instruction(
+                        program_id=PUMP_PROGRAM_ID,
+                        accounts=buy_accounts,
+                        data=buy_ix_data
+                    )
+                    
+                    instructions.append(buy_ix)
+                
+                # Get new blockhash
                 blockhash_resp = self.client.get_latest_blockhash()
                 blockhash = blockhash_resp.value.blockhash
                 
-                # Create transaction message
-                message = Message([create_ix], self.public_key)
+                # Construct transaction message
+                message = Message(instructions, self.public_key)
                 
-                # Create transaction with message, signers and blockhash
+                # Construct transaction
                 tx = Transaction(
                     [self.keypair, mint_keypair], 
                     message, 
                     blockhash
                 )
                 
+                # Serialize and send transaction
                 try:
-                    # Serialize and send transaction
-                    if hasattr(tx, 'serialize'):
-                        serialized_tx = tx.serialize()
-                    else:
-                        serialized_tx = bytes(tx)
-                        
+                    # Use bytes() to serialize the transaction
+                    serialized_tx = bytes(tx)
                     result = self.client.send_raw_transaction(serialized_tx)
                     
                     print(f"Transaction submitted: {result.value}")
@@ -191,11 +337,11 @@ class PumpTokenCreator:
                         "success": True,
                         "mint": str(mint_keypair.pubkey()),
                         "tx_signature": result.value,
-                        "bonding_curve": str(pdas["bonding_curve"])
+                        "bonding_curve": str(pdas["bonding_curve"]),
+                        "dev_buy_amount": dev_buy_amount if dev_buy_amount > 0 else 0
                     }
-                except AttributeError as e:
-                    print("Error: Unable to serialize transaction. Check your solders library version.")
-                    print(f"Error details: {str(e)}")
+                except Exception as e:
+                    print(f"Error during transaction serialization: {str(e)}")
                     return {"success": False, "error": str(e)}
                 
             except Exception as e:
@@ -203,16 +349,17 @@ class PumpTokenCreator:
                 if "Blockhash not found" in error_str:
                     retry_count += 1
                     if retry_count < max_retries:
-                        print(f"Attempt {retry_count + 1} of {max_retries}...")
-                        time.sleep(1)  # Wait before retrying
+                        print(f"Attempt {retry_count + 1} out of {max_retries}...")
+                        time.sleep(1)
                         continue
                 print(f"Error creating token: {error_str}")
                 return {"success": False, "error": error_str}
         
         return {"success": False, "error": "Maximum number of attempts reached"}
 
+
 def upload_to_ipfs(image_path):
-    """Upload image to IPFS via Pinata"""
+    """Upload an image to IPFS via Pinata"""
     try:
         url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
         
@@ -257,10 +404,10 @@ def upload_metadata_to_ipfs(metadata):
         return None
 
 def interactive_token_creation():
-    print("=== Pump Fun Token Creator ===")
+    print("=== Pump Token Creator ===")
     
-    # Check if using default key or request a new one
-    use_default_key = PRIVATE_KEY != "YOUR_PRIVATE_KEY"
+    # Check if using default key or ask for a new one
+    use_default_key = PRIVATE_KEY != "VOTRE_CLE_PRIVEE_ICI"
     private_key = PRIVATE_KEY
     
     if not use_default_key:
@@ -279,13 +426,13 @@ def interactive_token_creation():
     
     # Image handling
     print("\nImage handling:")
-    print("1. Use local image (will be uploaded to IPFS)")
-    print("2. Use image URL")
+    print("1. Use a local image (will be uploaded to IPFS)")
+    print("2. Use an image URL")
     image_choice = input("Choose an option (1 or 2): ")
     
     image_uri = None
     if image_choice == "1":
-        image_path = input("Image filename (e.g. image.png): ")
+        image_path = input("Image file name (ex: image.png): ")
         if os.path.exists(image_path):
             print("\nUploading image to IPFS...")
             image_uri = upload_to_ipfs(image_path)
@@ -309,7 +456,20 @@ def interactive_token_creation():
     website = input("Website (leave empty if none): ")
     twitter = input("Twitter link (leave empty if none): ")
     
-    # Create Metaplex format metadata
+    # Ask for initial dev buy amount
+    dev_buy_amount = 0
+    try:
+        dev_buy_input = input("\nInitial dev buy amount in SOL (leave empty or 0 for none): ")
+        if dev_buy_input.strip():
+            dev_buy_amount = float(dev_buy_input)
+            if dev_buy_amount < 0:
+                print("Amount cannot be negative. Setting to 0.")
+                dev_buy_amount = 0
+    except ValueError:
+        print("Invalid amount. Setting to 0.")
+        dev_buy_amount = 0
+    
+    # Create metadata in Metaplex format
     metadata = {
         "name": name,
         "symbol": symbol,
@@ -338,8 +498,8 @@ def interactive_token_creation():
     metadata_uri = upload_metadata_to_ipfs(metadata)
     
     if not metadata_uri:
-        print("Metadata upload failed. Using data URI instead.")
-        # Use data URI as fallback
+        print("Failed to upload metadata. Using data URI as fallback.")
+        # Use a data URI as fallback solution
         metadata_json = json.dumps(metadata)
         metadata_uri = f"data:application/json;base64,{base64.b64encode(metadata_json.encode()).decode()}"
     
@@ -357,21 +517,24 @@ def interactive_token_creation():
     print(f"Website: {website if website else 'Not specified'}")
     print(f"Twitter: {twitter if twitter else 'Not specified'}")
     print(f"Creator: {creator_address if creator_address else creator.public_key}")
+    print(f"Initial dev buy: {dev_buy_amount if dev_buy_amount > 0 else 'None'} SOL")
     
     confirm = input("\nConfirm token creation? (y/n): ")
     if confirm.lower() != 'y':
         print("Creation cancelled")
         return
     
-    # Create token
+    # Create token with optional initial buy
     print("\nCreating token...")
-    result = creator.create_token(name, symbol, metadata_uri, creator_address)
+    result = creator.create_token_with_buy(name, symbol, metadata_uri, dev_buy_amount, creator_address)
     
     if result["success"]:
         print("\n=== Token creation successful! ===")
         print(f"Mint address: {result['mint']}")
         print(f"Transaction signature: {result['tx_signature']}")
         print(f"Bonding curve address: {result['bonding_curve']}")
+        if result.get("dev_buy_amount", 0) > 0:
+            print(f"Initial dev buy: {result['dev_buy_amount']} SOL")
         print("\nToken is now available on the blockchain!")
     else:
         print("\n=== Token creation failed ===")

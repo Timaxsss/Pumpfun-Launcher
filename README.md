@@ -1,94 +1,67 @@
-# Pump Fun Token Creator
+# Pump Fun Token Launcher
 
-A Python script that enables direct token creation on Solana through the terminal, bypassing the potentially slow Pump Fun web interface. It uses the Pump Fun protocol's IDL (Interface Description Language) and smart contract.
+A command-line tool for creating tokens on Solana using the Pump Fun protocol. This tool directly interacts with the Pump Fun smart contract and IDL, providing a fast and efficient way to launch tokens with optional initial liquidity.
 
-## What is Pump Fun?
+## Overview
 
-Pump Fun is a fully decentralized protocol on Solana that enables the creation of tokens with built-in bonding curves. This script directly interacts with the Pump Fun smart contract (program ID: `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`) using its IDL, without relying on any external APIs or centralized services.
+Pump Fun is a decentralized protocol on Solana that enables token creation with built-in bonding curves. This launcher bypasses the web interface and directly interacts with the protocol's smart contract (program ID: `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`).
 
-## Technical Overview
+## Key Features
 
-- Direct interaction with Solana blockchain using the Pump Fun program ID
-- Uses the protocol's IDL for transaction construction
-- Implements the bonding curve logic directly from the smart contract
-- Creates tokens with proper metadata following Metaplex standards
-- Handles all necessary PDAs (Program Derived Addresses) calculations
-
-## Features
-
-- Create new tokens on Solana mainnet
-- Direct interaction with the Pump Fun smart contract
-- Automatic bonding curve setup using protocol parameters
-- No reliance on external APIs (except optional IPFS for metadata)
-- Full control over token creation process
-- Interactive command-line interface
+- Direct interaction with Pump Fun smart contract and IDL
+- Token creation with Metaplex-compliant metadata
+- Optional initial liquidity provision (dev buy)
+- IPFS metadata storage via Pinata
+- Interactive CLI for easy token configuration
+- Full control over token parameters
 
 ## Prerequisites
 
 - Python 3.7+
 - Solana CLI tools
-- A Solana wallet with SOL for transaction fees
-- (Optional) Pinata API keys for IPFS metadata storage
+- SOL for transaction fees
+- (Optional) Pinata API keys for IPFS storage
 
-## Installation
+## Quick Start
 
-1. Clone this repository:
+1. Clone the repository:
 ```bash
-git clone https://github.com/Timaxsss/launch-pumpfun.git
-cd launch-pumpfun
+git clone https://github.com/Timaxsss/Pumpfun-Launcher.git
+cd Pumpfun-Launcher
 ```
 
-2. Install required dependencies:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure your settings:
-   - Open `create.py`
-   - Replace `YOUR_PRIVATE_KEY` with your Solana private key (optional - you can enter it during runtime)
-   - (Optional) Replace Pinata API keys if you want to use IPFS for metadata
+3. Configure environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your credentials
+```
 
-## Usage
-
-1. Run the script:
+4. Run the launcher:
 ```bash
 python create.py
 ```
 
-2. Follow the interactive prompts:
-   - Enter token name, symbol, and description
-   - Choose to upload an image or use an existing URL
-   - Add optional social links
-   - Confirm token creation
+## Technical Implementation
 
-3. The script will:
-   - Calculate all necessary PDAs for the token
-   - Construct the transaction using the Pump Fun IDL
-   - Deploy your token directly to the Solana blockchain
-   - Provide you with the mint address and bonding curve address
+The launcher works by:
+1. Calculating required PDAs (Program Derived Addresses)
+2. Constructing transactions using Pump Fun's instruction format
+3. Creating token metadata following Metaplex standards
+4. Deploying to Solana mainnet
+5. Optionally providing initial liquidity
 
-## Technical Details
+## Security Notes
 
-The script works by:
-1. Calculating all required PDAs (Program Derived Addresses) for the token
-2. Constructing the transaction using the Pump Fun program's instruction format
-3. Creating the token metadata following Metaplex standards
-4. Sending the transaction directly to the Solana network
-5. Setting up the bonding curve as defined in the Pump Fun protocol
-
-## Important Notes
-
-- The script interacts directly with the Solana blockchain and the Pump Fun smart contract
-- No external APIs are required for token creation (except optional IPFS for metadata)
-- All bonding curve parameters are set by the Pump Fun protocol's smart contract
-- Make sure you have enough SOL in your wallet for transaction fees
+- Never commit your `.env` file
+- Use a dedicated wallet for token creation
+- Verify all transaction details before confirming
 - Keep your private keys secure
-- Double-check all information before confirming token creation
-
-## Support
-
-For issues or questions, please open an issue in the GitHub repository.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+MIT License - See LICENSE file for details 
