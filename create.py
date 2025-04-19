@@ -475,6 +475,9 @@ def interactive_token_creation():
         "symbol": symbol,
         "description": description,
         "image": image_uri,
+        "twitter": twitter if twitter else "",
+        "telegram": telegram if telegram else "",
+        "website": website if website else "",
         "attributes": [],
         "properties": {
             "files": [{"uri": image_uri, "type": "image/png"}],
