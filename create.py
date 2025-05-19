@@ -32,8 +32,7 @@ EVENT_AUTHORITY = Pubkey.from_string("Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
 PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
 
-# Remplacez ceci par votre clé privée réelle
-PRIVATE_KEY = "VOTRE_CLE_PRIVEE_ICI"  # Format base58
+PRIVATE_KEY = "VOTRE_CLE_PRIVEE_ICI"  # base58 format
 
 class PumpTokenCreator:
     """
