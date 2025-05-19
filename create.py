@@ -406,7 +406,7 @@ def interactive_token_creation():
     print("=== Pump Token Creator ===")
     
     # Check if using default key or ask for a new one
-    use_default_key = PRIVATE_KEY != "VOTRE_CLE_PRIVEE_ICI"
+    use_default_key = PRIVATE_KEY != "private_key"
     private_key = PRIVATE_KEY
     
     if not use_default_key:
